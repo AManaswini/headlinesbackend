@@ -1,0 +1,45 @@
+## clean : 	remove temporary files from repo; does not ask for permission (will delete all matches)
+# note: complex regex like (src|test) is not compatible for both OSX and Ubuntu with the same command, hence the loop over directory names
+delete-pattern = find . -regex 'pattern' -delete
+.PHONY: clean-py clean-r clean
+clean: clean-py clean-r
+clean-py:
+	@rm -f .coverage
+	@rm -rf build/
+	@rm -rf dist/
+	@rm -rf .eggs/
+	@rm -rf .pytest_cache/
+	@for dir in $(CLEAN_DIRS_LIST); do find . -regex "\./$${dir}/.*egg-info.*" -delete; done
+	@for dir in $(CLEAN_DIRS_LIST); do find . -regex "\./$${dir}/.*egg.*" -delete; done
+	@for dir in $(CLEAN_DIRS_LIST); do find . -regex "\./$${dir}/.*\.py[co]" -delete; done
+	@for dir in $(CLEAN_DIRS_LIST); do find . -regex "\./$${dir}/.*__pycache__.*" -delete; done
+clean-r:
+	@for dir in $(CLEAN_DIRS_LIST); do find . -regex "\./$${dir}/.*_files/figure-html" -delete; done
+
+
+## format : 	apply style scripts to autoformat matching scripts
+.PHONY: format-py format-r format
+format: format-py format-r
+format-py: clean
+	$(PYTHON) -m black --include="($(CLEAN_DIRS_REGEX)).*.pyi?$$" --line-length $(LINTING_LINELENGTH) .
+	$(PYTHON) -m isort --line-width $(LINTING_LINELENGTH) --multi-line 3 --trailing-comma $(CLEAN_DIRS_LIST)
+format-r: clean
+	R --silent -e "styler::style_dir(path = '$(EXPERIMENT_DIR)')"
+	R --silent -e "styler::style_dir(path = '$(PROJECT_DIR)')"
+
+
+## lint :		test that code adheres to style guides
+.PHONY: lint-py lint-r lint
+lint: lint-py
+lint-py: clean
+	$(PYTHON) -m black --check --include="($(CLEAN_DIRS_REGEX))/.*pyi?$$" --line-length $(LINTING_LINELENGTH) .
+	$(PYTHON) -m isort \
+		--check-only \
+		--line-width $(LINTING_LINELENGTH) \
+		--multi-line 3 \
+		--trailing-comma \
+		$(CLEAN_DIRS_LIST)
+	darglint --docstring-style google --strictness long $(PACKAGE_DIR)
+lint-r: clean
+	R --silent -e "if (length(lintr::lint_dir(path = '$(EXPERIMENT_DIR)')) > 0) stop()"
+	R --silent -e "if (length(lintr::lint_dir(path = '$(PROJECT_DIR)')) > 0) stop()"
